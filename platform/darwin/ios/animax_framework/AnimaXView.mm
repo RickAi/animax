@@ -14,6 +14,8 @@
 #import "AnimaXContext+Internal.h"
 #import "AnimaXLayer.h"
 #import "AnimaXResourceLoaderHolder.h"
+#import "AnimaXRustCoreIOS.h"
+#if !ANIMAX_USE_RUST_CORE
 #include "include/base/player_event_tracker.h"
 #include "src/base/log/log.h"
 #include "src/base/thread/task_runner.h"
@@ -22,8 +24,14 @@
 #include "src/model/composition_model.h"
 #include "src/model/layer_model.h"
 #include "src/model/text/font_character_model.h"
+#endif
 
-@interface AnimaXView () <AnimaXLayerProtocol, AnimaXApplicationLifecycleListener>
+@interface AnimaXView () <AnimaXLayerProtocol
+#if !ANIMAX_USE_RUST_CORE
+                          ,
+                          AnimaXApplicationLifecycleListener
+#endif
+                          >
 
 @property(strong, nonatomic, nullable) CAMetalLayer *gpuLayer;
 @property(nonatomic, nonnull, readwrite) id<AnimaXPlayerProtocol> player;
@@ -51,7 +59,14 @@
     player.compositionListener = self;
     player.lifecycleView = self;
     _player = player;
+#if ANIMAX_USE_RUST_CORE
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(onAnimaXApplicationDidBecomeActive)
+                                                 name:UIApplicationDidBecomeActiveNotification
+                                               object:nil];
+#else
     lynx::animax::LifecycleManager::Instance().AddApplicationLifecycleListener(self);
+#endif
     [self notifyFrameChanged];
   }
   return self;
@@ -69,13 +84,23 @@
     player.compositionListener = self;
     player.lifecycleView = self;
     _player = player;
+#if ANIMAX_USE_RUST_CORE
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(onAnimaXApplicationDidBecomeActive)
+                                                 name:UIApplicationDidBecomeActiveNotification
+                                               object:nil];
+#else
     lynx::animax::LifecycleManager::Instance().AddApplicationLifecycleListener(self);
+#endif
     [self notifyFrameChanged];
   }
   return self;
 }
 
 - (void)dealloc {
+#if ANIMAX_USE_RUST_CORE
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
+#endif
   // compatible with legacy logic
   _player = nil;
 }
@@ -85,7 +110,11 @@
 }
 
 - (BOOL)isAnimaXSurfaceCreationAllowed {
+#if ANIMAX_USE_RUST_CORE
+  return lynx::animax::RustIsApplicationActive();
+#else
   return lynx::animax::LifecycleManager::Instance().IsApplicationActive();
+#endif
 }
 
 - (void)initGPULayer {
@@ -94,7 +123,11 @@
     return;
   }
 
+#if ANIMAX_USE_RUST_CORE
+  self.gpuLayer = lynx::animax::RustCreateDisplayLayer(self.frame, self.layer.contentsScale);
+#else
   self.gpuLayer = lynx::animax::CreateCAMetalLayer(self.frame, self.layer.contentsScale);
+#endif
   [self.layer addSublayer:self.gpuLayer];
   self.drawable = [[AnimaXSurfaceDrawable alloc] initWithMetalLayer:self.gpuLayer
                                                               scale:self.layer.contentsScale];
@@ -131,7 +164,11 @@
   if (!self.drawable) {
     [self initGPULayer];
   } else if ([self.drawable updateSize:CGSizeMake(width, height)]) {
+#if ANIMAX_USE_RUST_CORE
+    lynx::animax::RustResizeCALayer(self.gpuLayer, self.bounds.size);
+#else
     lynx::animax::ResizeCALayer(self.gpuLayer, self.bounds.size);
+#endif
   } else {
     return;
   }

@@ -3,7 +3,10 @@
 // LICENSE file in the root directory of this source tree.
 
 #import <AnimaX/AnimaXServiceCenter.h>
+#import "AnimaXRustCoreIOS.h"
+#if !ANIMAX_USE_RUST_CORE
 #include "src/base/log/log.h"
+#endif
 
 @interface AnimaXServiceCenter ()
 @property(nonatomic, strong)

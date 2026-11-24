@@ -16,6 +16,8 @@
 #import "AnimaXLayer.h"
 #import "AnimaXResourceLoaderHolder.h"
 #import "AnimaXSurfaceDrawable+Internal.h"
+#import "AnimaXRustCoreIOS.h"
+#if !ANIMAX_USE_RUST_CORE
 #include "include/base/player_event_tracker.h"
 #include "src/base/log/log.h"
 #include "src/base/thread/task_runner.h"
@@ -23,6 +25,7 @@
 #include "src/model/composition_model.h"
 #include "src/model/layer_model.h"
 #include "src/model/text/font_character_model.h"
+#endif
 
 @interface AnimaXImageView () <AnimaXPixelBufferUpdateListener, AnimaXLayerProtocol>
 
@@ -115,7 +118,7 @@
     return;
   }
   if (!self.drawable) {
-#ifdef ENABLE_IOS_SOFTWARE_RENDER
+#if defined(ENABLE_IOS_SOFTWARE_RENDER) || ANIMAX_USE_RUST_CORE
     self.drawable = [[AnimaXSurfaceDrawable alloc] initWithView:self
                                                            size:CGSizeMake(width, height)
                                                         backend:AnimaXSoftware];

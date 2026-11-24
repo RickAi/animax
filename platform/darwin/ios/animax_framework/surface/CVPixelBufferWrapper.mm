@@ -6,9 +6,12 @@
 
 #import <CoreVideo/CVMetalTextureCache.h>
 
+#import "AnimaXRustCoreIOS.h"
+#if !ANIMAX_USE_RUST_CORE
 #include "include/player/animax_surface.h"
 #include "src/base/log/log.h"
 #include "src/base/util/buffer_copy_helper.h"
+#endif
 
 ANIMAX_SCOPED_OBJECT_IMPLEMENTATION(AnimaXScopedCVPixelBuffer, CVPixelBufferRef,
                                     CVPixelBufferRetain, CVPixelBufferRelease)
@@ -341,9 +344,15 @@ ANIMAX_SCOPED_OBJECT_IMPLEMENTATION(AnimaXScopedCVPixelBuffer, CVPixelBufferRef,
   }
   size_t dstWidth = CVPixelBufferGetWidth(buffer);
   size_t dstHeight = CVPixelBufferGetHeight(buffer);
+#if ANIMAX_USE_RUST_CORE
+  if (width != dstWidth || height != dstHeight) {
+    return NO;
+  }
+#else
   if (!lynx::animax::BufferCopyHelper::IsSizeMatch(width, height, dstWidth, dstHeight)) {
     return NO;
   }
+#endif
   size_t dstStride = CVPixelBufferGetBytesPerRow(buffer);
   CVReturn rc = CVPixelBufferLockBaseAddress(buffer, 0);
   if (rc != kCVReturnSuccess) {
@@ -356,7 +365,11 @@ ANIMAX_SCOPED_OBJECT_IMPLEMENTATION(AnimaXScopedCVPixelBuffer, CVPixelBufferRef,
     CVPixelBufferUnlockBaseAddress(buffer, 0);
     return NO;
   }
+#if ANIMAX_USE_RUST_CORE
+  lynx::animax::RustCopyBuffer(pixels, dstPixels, height, stride, dstStride);
+#else
   lynx::animax::BufferCopyHelper::CopyBuffer(pixels, dstPixels, height, stride, dstStride);
+#endif
   CVPixelBufferUnlockBaseAddress(buffer, 0);
   return YES;
 }

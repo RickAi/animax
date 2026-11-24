@@ -8,8 +8,11 @@
 #import "AnimaXSurfaceDrawable+Internal.h"
 #import "CVPixelBufferWrapper.h"
 
+#import "AnimaXRustCoreIOS.h"
+#if !ANIMAX_USE_RUST_CORE
 #include "src/base/log/log.h"
 #include "src/base/util/ios/ca_util.h"
+#endif
 
 @interface AnimaXSurfaceDrawable ()
 

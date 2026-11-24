@@ -5,20 +5,20 @@
 
 set -euo pipefail
 
-# Minimal build script for AnimaXExample (compile-only).
-# Purpose: verify the project compiles without signing or IPA export.
-# Notes:
-# - No archive/export; uses non-signing build to iphoneos SDK.
-# - Output products go to local ./build via SYMROOT.
+# Build script for AnimaXExample iOS.
+# Defaults to the pure Rust AnimaX core + Rust Skity renderer (USE_RUST_CORE=1).
+# Set USE_RUST_CORE=0 to use the legacy C++/Skity/GN CocoaPods build.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 cd "${SCRIPT_DIR}"
 
-# Configurable parameters (override with env vars if needed).
+: "${USE_RUST_CORE:=1}"
 : "${CONFIGURATION:=Debug}"
 : "${SCHEME:=AnimaXExample}"
 : "${WORKSPACE:=AnimaXExample.xcworkspace}"
 : "${ARCH:=arm64}"
+: "${SDK:=iphonesimulator}"
 : "${BUILD_DIR:=build}"
 
 export DISABLE_CUSTOM_GEMS_CACHE=${DISABLE_CUSTOM_GEMS_CACHE:-0}
@@ -26,26 +26,36 @@ export DISABLE_CUSTOM_GEMS_CACHE=${DISABLE_CUSTOM_GEMS_CACHE:-0}
 echo "[1/4] Cleaning previous artifacts"
 rm -rf Pods Podfile.lock "${BUILD_DIR}" results_bundle* ../../../.seer/seer.yml ../../../.seer/information.yml
 
-echo "[2/4] Xcode clean (${CONFIGURATION})"
-xcodebuild clean \
-  -workspace "${WORKSPACE}" \
-  -scheme "${SCHEME}" \
-  -configuration "${CONFIGURATION}" \
-  -quiet || true
+if [[ "${USE_RUST_CORE}" == "1" ]]; then
+  echo "[2/4] Building pure Rust AnimaX + Rust Skity XCFramework"
+  python3 "${ROOT_DIR}/tools/build_rust.py" --target ios
+  python3 "${ROOT_DIR}/tools/ios_tools/generate_rust_podspec.py"
 
-echo "[3/4] Installing bundles/pods"
-./bundle_install.sh
+  echo "[3/4] Installing CocoaPods (pure Rust core)"
+  export ANIMAX_USE_RUST_CORE=1
+  pod install --verbose
+else
+  echo "[2/4] Xcode clean (${CONFIGURATION})"
+  xcodebuild clean \
+    -workspace "${WORKSPACE}" \
+    -scheme "${SCHEME}" \
+    -configuration "${CONFIGURATION}" \
+    -quiet || true
 
-echo "[4/4] Building (compile-only) → ${BUILD_DIR}"
+  echo "[3/4] Installing bundles/pods (legacy C++ core)"
+  export ANIMAX_USE_RUST_CORE=0
+  ./bundle_install.sh
+fi
+
+echo "[4/4] Building (${SDK}/${ARCH}) → ${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 
-# Compile only: build targets without signing or IPA export.
 xcodebuild \
   -workspace "${WORKSPACE}" \
   -scheme "${SCHEME}" \
   -configuration "${CONFIGURATION}" \
   -arch "${ARCH}" \
-  -sdk iphoneos \
+  -sdk "${SDK}" \
   SYMROOT="$(pwd)/${BUILD_DIR}" \
   CODE_SIGN_IDENTITY="" \
   CODE_SIGNING_REQUIRED=NO

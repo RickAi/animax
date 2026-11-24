@@ -9,8 +9,11 @@
 #import "AnimaXComposition+Internal.h"
 #import "AnimaXResourceLoaderHolder+Internal.h"
 #import "AnimaXResourceLoaderHolder.h"
+#import "AnimaXRustCoreIOS.h"
 #import "AnimaXThreadSafeDictionary.h"
+#if !ANIMAX_USE_RUST_CORE
 #include "src/resource/composition_loader/animax_composition_factory.h"
+#endif
 
 @interface AnimaXCompositionFactory ()
 @property(nonatomic, strong)
@@ -43,6 +46,7 @@
   }
 }
 
+#if !ANIMAX_USE_RUST_CORE
 - (void)handleCompositionModel:(std::shared_ptr<lynx::animax::CompositionModel>)model
                          error:(const std::string &)errorMessage
                     completion:(AnimaXCompositionCompletionBlock)completion {
@@ -64,11 +68,30 @@
   AnimaXComposition *composition = [[AnimaXComposition alloc] initWithSharedModel:&model];
   completion(composition, nil);
 }
+#endif
 
 - (void)loadJson:(NSString *)json
      withContext:(AnimaXContext *)context
       completion:(AnimaXCompositionCompletionBlock)completion {
   [self ensureLoaderForContext:context];
+#if ANIMAX_USE_RUST_CORE
+  if (!completion) return;
+  std::string s = json ? std::string(json.UTF8String) : "";
+  lynx::animax::RustPlayerBridge probe(static_cast<float>(context.scale > 0 ? context.scale : 1.0));
+  if (probe.SetJson(s)) {
+    auto model = std::make_shared<lynx::animax::RustCompositionModel>();
+    model->json = std::move(s);
+    model->start_frame = animax_player_get_start_frame(probe.raw());
+    model->end_frame = animax_player_get_end_frame(probe.raw());
+    AnimaXComposition *comp = [[AnimaXComposition alloc] initWithSharedModel:&model];
+    completion(comp, nil);
+  } else {
+    NSError *err = [NSError errorWithDomain:@"AnimaXCompositionErrorDomain"
+                                       code:-1
+                                   userInfo:@{NSLocalizedDescriptionKey : @"Invalid Lottie JSON"}];
+    completion(nil, err);
+  }
+#else
   AnimaXServiceScope *scope = context.ability.getServiceScope;
   __weak typeof(self) weakSelf = self;
   lynx::animax::AnimaXCompositionFactory::Instance().LoadJson(
@@ -77,6 +100,7 @@
                              const std::string &error) {
         [weakSelf handleCompositionModel:std::move(model) error:error completion:completion];
       });
+#endif
 }
 
 - (void)loadJson:(NSString *)json completion:(AnimaXCompositionCompletionBlock)completion {
@@ -89,6 +113,41 @@
     withContext:(AnimaXContext *)context
      completion:(AnimaXCompositionCompletionBlock)completion {
   [self ensureLoaderForContext:context];
+#if ANIMAX_USE_RUST_CORE
+  float scale = static_cast<float>(context.scale > 0 ? context.scale : 1.0);
+  lynx::animax::RustLoadUriData(uri, nil, ^(NSData *data, NSError *err) {
+    if (!completion) return;
+    if (err || !data.length) {
+      completion(nil, err ?: [NSError errorWithDomain:@"AnimaXCompositionErrorDomain"
+                                                 code:-1
+                                             userInfo:@{NSLocalizedDescriptionKey : @"Empty URI data"}]);
+      return;
+    }
+    const auto *bytes = static_cast<const uint8_t *>(data.bytes);
+    const size_t len = data.length;
+    auto model = std::make_shared<lynx::animax::RustCompositionModel>();
+    lynx::animax::RustPlayerBridge probe(scale);
+    bool ok = false;
+    if (len >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x03 && bytes[3] == 0x04) {
+      model->is_zip = true;
+      model->zip_bytes.assign(bytes, bytes + len);
+      ok = probe.SetZip(bytes, len);
+    } else {
+      model->json.assign(reinterpret_cast<const char *>(bytes), len);
+      ok = probe.SetJson(model->json);
+    }
+    if (ok) {
+      model->start_frame = animax_player_get_start_frame(probe.raw());
+      model->end_frame = animax_player_get_end_frame(probe.raw());
+      AnimaXComposition *comp = [[AnimaXComposition alloc] initWithSharedModel:&model];
+      completion(comp, nil);
+    } else {
+      completion(nil, [NSError errorWithDomain:@"AnimaXCompositionErrorDomain"
+                                          code:-1
+                                      userInfo:@{NSLocalizedDescriptionKey : @"Failed to parse composition"}]);
+    }
+  });
+#else
   AnimaXServiceScope *scope = context.ability.getServiceScope;
   __weak typeof(self) weakSelf = self;
   lynx::animax::AnimaXCompositionFactory::Instance().LoadUri(
@@ -97,6 +156,7 @@
                              const std::string &error) {
         [weakSelf handleCompositionModel:std::move(model) error:error completion:completion];
       });
+#endif
 }
 
 - (void)loadUri:(NSString *)uri completion:(AnimaXCompositionCompletionBlock)completion {
@@ -107,7 +167,9 @@
 
 - (void)releaseAll {
   [_loaderMap removeAllObjects];
+#if !ANIMAX_USE_RUST_CORE
   lynx::animax::AnimaXCompositionFactory::Instance().Release();
+#endif
 }
 
 @end

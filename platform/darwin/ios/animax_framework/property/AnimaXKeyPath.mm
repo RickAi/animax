@@ -6,8 +6,11 @@
 #include <string>
 #include <vector>
 #import "AnimaXKeyPath+Internal.h"
+#import "AnimaXRustCoreIOS.h"
+#if !ANIMAX_USE_RUST_CORE
 #include "include/property/animax_key_path.h"
 #include "src/base/log/log.h"
+#endif
 
 @implementation AnimaXKeyPath
 
@@ -35,11 +38,6 @@
 
 @implementation AnimaXKeyPath (Internal)
 
-- (std::unique_ptr<lynx::animax::AnimaXKeyPath>)toNative {
-  std::vector<std::string> keys = [self toStringVector];
-  return std::unique_ptr<lynx::animax::AnimaXKeyPath>(new lynx::animax::AnimaXKeyPath(keys));
-}
-
 - (std::vector<std::string>)toStringVector {
   std::vector<std::string> keys;
 
@@ -55,6 +53,12 @@
   return keys;
 }
 
+#if !ANIMAX_USE_RUST_CORE
+- (std::unique_ptr<lynx::animax::AnimaXKeyPath>)toNative {
+  std::vector<std::string> keys = [self toStringVector];
+  return std::unique_ptr<lynx::animax::AnimaXKeyPath>(new lynx::animax::AnimaXKeyPath(keys));
+}
+
 - (instancetype)initWithNativeKeyPath:(const lynx::animax::AnimaXKeyPath &)nativeKeyPath {
   NSMutableArray<NSString *> *keys = [NSMutableArray array];
   for (const auto &key : nativeKeyPath.GetKeys()) {
@@ -63,5 +67,6 @@
   // Call the designated initializer of the main class
   return [self initWithKeys:keys];
 }
+#endif
 
 @end

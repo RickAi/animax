@@ -3,6 +3,9 @@
 // LICENSE file in the root directory of this source tree.
 
 #import <AnimaX/AnimaX.h>
+#import "AnimaXRustCoreIOS.h"
+
+#if !ANIMAX_USE_RUST_CORE
 #include "src/base/util/animax_native.h"
 
 #if __has_include("BDALog/BDAgileLog.h")
@@ -37,6 +40,7 @@ lynx::animax::ALogFunction GetAlogWriteFuncAddr() {
   return nullptr;
 #endif
 }
+#endif  // !ANIMAX_USE_RUST_CORE
 
 @implementation AnimaX
 + (instancetype)shareInstance {
@@ -52,7 +56,9 @@ lynx::animax::ALogFunction GetAlogWriteFuncAddr() {
 - (void)registerLoggerOnce {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
+#if !ANIMAX_USE_RUST_CORE
     lynx::animax::AnimaXNative::Instance().RegisterALogFunction(GetAlogWriteFuncAddr());
+#endif
   });
 }
 

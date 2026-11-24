@@ -15,39 +15,47 @@ def load_dependency_versions(path)
 end
 
 pod_path = '../../../../'
-dependency_versions = load_dependency_versions(File.expand_path(File.join(pod_path, 'versions.properties'), __dir__))
+USE_RUST_CORE = ENV.fetch('ANIMAX_USE_RUST_CORE', '1') != '0'
 
 platform :ios, '12.0'
 
-LYNX_VERSION = dependency_versions.fetch('LYNX_VERSION')
-TEXTRA_VERSION = dependency_versions.fetch('TEXTRA_VERSION')
-SKITY_VERSION = dependency_versions.fetch('SKITY_VERSION')
-
-install!'cocoapods',:deterministic_uuids=>false,
-                    :lock_pod_sources=>false,
-                    :generate_multiple_pod_projects => true,
-                    :incremental_installation=>true,
-                    :warn_for_multiple_pod_sources => false
+install! 'cocoapods', :deterministic_uuids => false,
+                      :lock_pod_sources => false,
+                      :generate_multiple_pod_projects => true,
+                      :incremental_installation => true,
+                      :warn_for_multiple_pod_sources => false
 
 post_install do |installer|
   installer.pod_target_subprojects.flat_map { |p| p.targets }.each do |t|
     t.build_configurations.each do |c|
-      c.build_settings['CODE_SIGNING_ALLOWED'] = "NO"
+      c.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
     end
   end
 end
 
 target 'AnimaXExample' do
-  pod 'AnimaX', :path => pod_path, :subspecs => [
-    'Core',
-    'Framework', 
-    'RenderBackend/Skity',
-    'Textra',
-    'ThirdParty',
-    'ThirdParty/NapiBinding'
-  ]
+  if USE_RUST_CORE
+    pod 'AnimaX', :path => pod_path, :subspecs => [
+      'Core',
+      'Framework'
+    ]
+  else
+    dependency_versions = load_dependency_versions(File.expand_path(File.join(pod_path, 'versions.properties'), __dir__))
+    LYNX_VERSION = dependency_versions.fetch('LYNX_VERSION')
+    TEXTRA_VERSION = dependency_versions.fetch('TEXTRA_VERSION')
+    SKITY_VERSION = dependency_versions.fetch('SKITY_VERSION')
 
-  pod 'skity', SKITY_VERSION
-  pod 'LynxTextra', TEXTRA_VERSION
-  pod 'LynxBase/Framework', LYNX_VERSION
+    pod 'AnimaX', :path => pod_path, :subspecs => [
+      'Core',
+      'Framework',
+      'RenderBackend/Skity',
+      'Textra',
+      'ThirdParty',
+      'ThirdParty/NapiBinding'
+    ]
+
+    pod 'skity', SKITY_VERSION
+    pod 'LynxTextra', TEXTRA_VERSION
+    pod 'LynxBase/Framework', LYNX_VERSION
+  end
 end

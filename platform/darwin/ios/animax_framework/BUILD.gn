@@ -79,6 +79,7 @@ animax_framework_sources = [
   "surface/CVPixelBufferWrapper.h",
   "surface/CVPixelBufferWrapper.mm",
   "util/AnimaX.mm",
+  "util/AnimaXRustCoreIOS.h",
   "util/AnimaXScopedObject.mm",
   "util/AnimaXThreadSafeDictionary.h",
   "util/AnimaXThreadSafeDictionary.m",

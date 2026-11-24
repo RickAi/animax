@@ -3,7 +3,16 @@
 // LICENSE file in the root directory of this source tree.
 
 #import <AnimaX/BaseAnimaXAbility.h>
+#import "AnimaXRustCoreIOS.h"
+#if ANIMAX_USE_RUST_CORE
+namespace lynx {
+namespace animax {
+using Event = RustEvent;
+}
+}
+#else
 #include "src/player/animax_event.h"
+#endif
 
 #pragma mark - Private Interface
 

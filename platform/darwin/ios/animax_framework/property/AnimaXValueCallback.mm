@@ -7,7 +7,9 @@
 #include <memory>
 #import "AnimaXValueCallback+Internal.h"
 #import "AnimaXValueParam+Internal.h"
+#import "AnimaXRustCoreIOS.h"
 
+#if !ANIMAX_USE_RUST_CORE
 #include "include/property/animax_value_param.h"
 #include "src/base/log/log.h"
 #include "src/model/value/base_value.h"
@@ -43,6 +45,7 @@ class AnimaXValueCallbackWrapper : public AnimaXValueCallback {
 
 }  // namespace animax
 }  // namespace lynx
+#endif
 
 @implementation AnimaXValueCallback
 
@@ -81,6 +84,7 @@ class AnimaXValueCallbackWrapper : public AnimaXValueCallback {
   return [self getValue:frameInfo];
 }
 
+#if !ANIMAX_USE_RUST_CORE
 + (std::shared_ptr<lynx::animax::AnimaXValueCallback>)
     createNativeCallback:(AnimaXValueCallback*)iosCallback
             propertyType:(LayerPropertyType)propertyType {
@@ -90,7 +94,6 @@ class AnimaXValueCallbackWrapper : public AnimaXValueCallback {
 
   auto layerType = static_cast<lynx::animax::LayerPropertyType>(propertyType);
 
-  // Create a holder to maintain strong references to OC objects
   struct CallbackHolder {
     AnimaXValueCallback* __strong callback;
 
@@ -98,18 +101,15 @@ class AnimaXValueCallbackWrapper : public AnimaXValueCallback {
     ~CallbackHolder() = default;
   };
 
-  // Define the getValue function that bridges OC to native
   auto getValueFunction =
       [holder = std::make_shared<CallbackHolder>(iosCallback)](
           const lynx::animax::Value* originalValue, const lynx::animax::AnimaXFrameInfo& frameInfo,
           lynx::animax::LayerPropertyType propertyType) -> std::unique_ptr<lynx::animax::Value> {
-    // Convert native frame info to OC types
     AnimaXValueParam* startValue =
         [AnimaXValueParam valueParamWithNativeValue:frameInfo.GetStartValue()];
     AnimaXValueParam* endValue =
         [AnimaXValueParam valueParamWithNativeValue:frameInfo.GetEndValue()];
 
-    // Create OC frame info object
     AnimaXFrameInfo* frameInfoOC =
         [[AnimaXFrameInfo alloc] initWithStartFrame:frameInfo.GetStartFrame()
                                            endFrame:frameInfo.GetEndFrame()
@@ -119,14 +119,12 @@ class AnimaXValueCallbackWrapper : public AnimaXValueCallback {
                                interpolatedProgress:frameInfo.GetInterpolatedProgress()
                                     overallProgress:frameInfo.GetOverallProgress()];
 
-    // Call OC callback directly in current thread
     AnimaXValueParam* result = [holder->callback getValue:frameInfoOC];
 
     if (!result) {
       return nullptr;
     }
 
-    // Convert result back to native Value
     auto nativeValueParam = [result toNative];
     if (!nativeValueParam) {
       return nullptr;
@@ -137,5 +135,6 @@ class AnimaXValueCallbackWrapper : public AnimaXValueCallback {
 
   return std::make_shared<lynx::animax::AnimaXValueCallbackWrapper>(getValueFunction, layerType);
 }
+#endif
 
 @end

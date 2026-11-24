@@ -4,9 +4,15 @@
 
 #import <AnimaX/AnimaXValueParam.h>
 #import "AnimaXValueParam+Internal.h"
+#import "AnimaXRustCoreIOS.h"
 
+#if ANIMAX_USE_RUST_CORE
+static constexpr int32_t kAnimaXFrameIndexAll = -1;
+#else
 #include "include/property/animax_value_param.h"
 #include "src/model/value/base_value.h"
+static constexpr int32_t kAnimaXFrameIndexAll = lynx::animax::AnimaXValueParam::kFrameIndexAll;
+#endif
 
 // Define a struct to hold 3D coordinates
 struct AnimaXCoordinate {
@@ -47,7 +53,7 @@ struct AnimaXCoordinate {
 #pragma mark - Factory Methods
 
 + (instancetype)paramWithString:(NSString *)value {
-  return [self paramWithString:value targetFrame:lynx::animax::AnimaXValueParam::kFrameIndexAll];
+  return [self paramWithString:value targetFrame:kAnimaXFrameIndexAll];
 }
 
 + (instancetype)paramWithString:(NSString *)value targetFrame:(NSInteger)targetFrame {
@@ -58,7 +64,7 @@ struct AnimaXCoordinate {
 }
 
 + (instancetype)paramWithNumber:(double)value {
-  return [self paramWithNumber:value targetFrame:lynx::animax::AnimaXValueParam::kFrameIndexAll];
+  return [self paramWithNumber:value targetFrame:kAnimaXFrameIndexAll];
 }
 
 + (instancetype)paramWithNumber:(double)value targetFrame:(NSInteger)targetFrame {
@@ -69,7 +75,7 @@ struct AnimaXCoordinate {
 }
 
 + (instancetype)paramWithBoolean:(BOOL)value {
-  return [self paramWithBoolean:value targetFrame:lynx::animax::AnimaXValueParam::kFrameIndexAll];
+  return [self paramWithBoolean:value targetFrame:kAnimaXFrameIndexAll];
 }
 
 + (instancetype)paramWithBoolean:(BOOL)value targetFrame:(NSInteger)targetFrame {
@@ -82,7 +88,7 @@ struct AnimaXCoordinate {
 + (instancetype)paramWithCoordinateX:(double)x y:(double)y {
   return [self paramWithCoordinateX:x
                                   y:y
-                        targetFrame:lynx::animax::AnimaXValueParam::kFrameIndexAll];
+                        targetFrame:kAnimaXFrameIndexAll];
 }
 
 + (instancetype)paramWithCoordinateX:(double)x y:(double)y targetFrame:(NSInteger)targetFrame {
@@ -93,7 +99,7 @@ struct AnimaXCoordinate {
   return [self paramWithCoordinateX:x
                                   y:y
                                   z:z
-                        targetFrame:lynx::animax::AnimaXValueParam::kFrameIndexAll];
+                        targetFrame:kAnimaXFrameIndexAll];
 }
 
 + (instancetype)paramWithCoordinateX:(double)x
@@ -107,7 +113,7 @@ struct AnimaXCoordinate {
 }
 
 + (instancetype)paramWithColor:(uint32_t)color {
-  return [self paramWithColor:color targetFrame:lynx::animax::AnimaXValueParam::kFrameIndexAll];
+  return [self paramWithColor:color targetFrame:kAnimaXFrameIndexAll];
 }
 
 + (instancetype)paramWithColor:(uint32_t)color targetFrame:(NSInteger)targetFrame {
@@ -120,7 +126,7 @@ struct AnimaXCoordinate {
 + (instancetype)paramWithColorFilter:(uint32_t)color mode:(NSInteger)mode {
   return [self paramWithColorFilter:color
                                mode:mode
-                        targetFrame:lynx::animax::AnimaXValueParam::kFrameIndexAll];
+                        targetFrame:kAnimaXFrameIndexAll];
 }
 
 + (instancetype)paramWithColorFilter:(uint32_t)color
@@ -135,13 +141,13 @@ struct AnimaXCoordinate {
 
 + (instancetype)nullParam {
   return [[AnimaXValueParam alloc] initWithType:AnimaXValueParamTypeNull
-                                    targetFrame:lynx::animax::AnimaXValueParam::kFrameIndexAll];
+                                    targetFrame:kAnimaXFrameIndexAll];
 }
 
 #pragma mark - Properties
 
 - (BOOL)hasTargetFrame {
-  return _internalTargetFrame != lynx::animax::AnimaXValueParam::kFrameIndexAll;
+  return _internalTargetFrame != kAnimaXFrameIndexAll;
 }
 
 - (NSInteger)targetFrame {
@@ -252,6 +258,7 @@ struct AnimaXCoordinate {
 
 @end
 
+#if !ANIMAX_USE_RUST_CORE
 @implementation AnimaXValueParam (Internal)
 
 - (std::unique_ptr<lynx::animax::AnimaXValueParam>)toNative {
@@ -293,7 +300,6 @@ struct AnimaXCoordinate {
     return nil;
   }
 
-  // Use the base class conversion to create an AnimaXValueParam from Value
   auto valueParam = lynx::animax::AnimaXValueParam::FromValue(value);
   if (!valueParam) {
     return nil;
@@ -307,7 +313,6 @@ struct AnimaXCoordinate {
     return nil;
   }
 
-  // Convert the native AnimaXValueParam to iOS AnimaXValueParam based on its type
   switch (valueParam->GetType()) {
     case lynx::animax::AnimaXValueParam::Type::kString:
       return [AnimaXValueParam paramWithString:@(valueParam->GetStringValue().c_str())];
@@ -332,3 +337,4 @@ struct AnimaXCoordinate {
 }
 
 @end
+#endif

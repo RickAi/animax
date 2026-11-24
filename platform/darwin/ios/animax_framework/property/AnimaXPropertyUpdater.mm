@@ -14,8 +14,153 @@
 #import <AnimaX/AnimaXValueCallback.h>
 #import <AnimaX/AnimaXValueParam.h>
 #import "AnimaXKeyPath+Internal.h"
+#import "AnimaXRustCoreIOS.h"
 #import "AnimaXValueCallback+Internal.h"
 #import "AnimaXValueParam+Internal.h"
+
+#if ANIMAX_USE_RUST_CORE
+
+#include <memory>
+#include <string>
+
+static std::string AnimaXKeyPathToCsv(AnimaXKeyPath *keyPath) {
+  if (!keyPath || keyPath.keys.count == 0) return "**";
+  NSString *joined = [keyPath.keys componentsJoinedByString:@","];
+  return joined.UTF8String ? std::string(joined.UTF8String) : "**";
+}
+
+@interface AnimaXPropertyUpdater () {
+  std::weak_ptr<lynx::animax::RustPlayerBridge> _rustPlayerWeak;
+}
+@end
+
+@implementation AnimaXPropertyUpdater
+
+- (instancetype)initWithPlayer:(void *)playerPtr {
+  self = [super init];
+  if (self && playerPtr) {
+    auto *sharedPtr = static_cast<std::shared_ptr<lynx::animax::RustPlayerBridge> *>(playerPtr);
+    _rustPlayerWeak = *sharedPtr;
+  }
+  return self;
+}
+
+- (void)updateLayerProperty:(AnimaXKeyPath *)keyPath
+               propertyType:(LayerPropertyType)propertyType
+                      value:(AnimaXValueParam *)value
+                   callback:(nullable id<AnimaXPropertyCallback>)callback {
+  auto player = _rustPlayerWeak.lock();
+  if (!player || !keyPath || !value) {
+    if (callback) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [callback onError:@[ @"Invalid player, keyPath, or value" ]];
+      });
+    }
+    return;
+  }
+
+  std::string csv = AnimaXKeyPathToCsv(keyPath);
+  uint16_t propType = static_cast<uint16_t>(propertyType);
+  int32_t targetFrame = value.hasTargetFrame ? static_cast<int32_t>(value.targetFrame) : -1;
+  bool ok = false;
+
+  switch (value.type) {
+    case AnimaXValueParamTypeString:
+      ok = player->SetLayerString(csv, propType, value.stringValue ? value.stringValue.UTF8String : "",
+                                  targetFrame);
+      break;
+    case AnimaXValueParamTypeNumber:
+      ok = player->SetLayerNumber(csv, propType, value.numberValue, targetFrame);
+      break;
+    case AnimaXValueParamTypeBoolean:
+      ok = player->SetLayerBool(csv, propType, value.booleanValue ? true : false, targetFrame);
+      break;
+    case AnimaXValueParamTypeCoordinate:
+      ok = player->SetLayerCoord(csv, propType, value.x, value.y, value.z, targetFrame);
+      break;
+    case AnimaXValueParamTypeColor:
+    case AnimaXValueParamTypeColorFilter:
+      ok = player->SetLayerColor(csv, propType, static_cast<int32_t>(value.colorValue), targetFrame);
+      break;
+    case AnimaXValueParamTypeNull:
+    default:
+      ok = false;
+      break;
+  }
+
+  if (callback) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (ok) {
+        [callback onSuccess];
+      } else {
+        [callback onError:@[ @"Property update failed" ]];
+      }
+    });
+  }
+}
+
+- (void)updateResourceProperty:(AnimaXKeyPath *)keyPath
+                  propertyType:(ResourcePropertyType)propertyType
+                         value:(AnimaXValueParam *)value
+                      callback:(nullable id<AnimaXPropertyCallback>)callback {
+  (void)keyPath;
+  (void)propertyType;
+  (void)value;
+  if (callback) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [callback onSuccess];
+    });
+  }
+}
+
+- (void)addLayerPropertyCallback:(LayerPropertyType)propertyType
+                         keyPath:(AnimaXKeyPath *)keyPath
+                   valueCallback:(AnimaXValueCallback *)valueCallback
+                        callback:(nullable id<AnimaXPropertyCallback>)callback {
+  (void)propertyType;
+  (void)keyPath;
+  (void)valueCallback;
+  if (callback) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [callback onSuccess];
+    });
+  }
+}
+
+- (void)getKeysForKeyPath:(AnimaXKeyPath *)keyPath
+                 callback:(nullable id<AnimaXKeyPathListCallback>)callback {
+  if (!callback) return;
+  auto player = _rustPlayerWeak.lock();
+  if (!player) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [callback onCallback:@[]];
+    });
+    return;
+  }
+  std::string csv = AnimaXKeyPathToCsv(keyPath);
+  char *json = animax_player_get_keys_for_key_path_json(player->raw(), csv.c_str());
+  NSMutableArray<AnimaXKeyPath *> *result = [NSMutableArray array];
+  if (json) {
+    NSData *data = [NSData dataWithBytes:json length:std::strlen(json)];
+    animax_string_free(json);
+    id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if ([parsed isKindOfClass:[NSArray class]]) {
+      for (id item in (NSArray *)parsed) {
+        if ([item isKindOfClass:[NSArray class]]) {
+          AnimaXKeyPath *kp = [[AnimaXKeyPath alloc] initWithKeys:(NSArray<NSString *> *)item];
+          if (kp) [result addObject:kp];
+        }
+      }
+    }
+  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [callback onCallback:[result copy]];
+  });
+}
+
+@end
+
+#else  // !ANIMAX_USE_RUST_CORE
 
 #include "include/player/animax_player.h"
 #include "include/property/property_update_request.h"
@@ -114,7 +259,6 @@
     return;
   }
 
-  // Create and execute request
   auto request = lynx::animax::ResourceUpdateRequest::Make(
       resourceType, std::move(resourceId), std::move(nativeValue), std::move(nativeCallback));
 
@@ -139,7 +283,6 @@
     return;
   }
 
-  // Convert OC types to native C++ types
   auto layerType = static_cast<lynx::animax::LayerPropertyType>(propertyType);
   auto nativeKeyPath = [keyPath toNative];
 
@@ -148,7 +291,6 @@
     return;
   }
 
-  // Create native value callback wrapper
   auto nativeValueCallback = [AnimaXValueCallback createNativeCallback:valueCallback
                                                           propertyType:propertyType];
   if (!nativeValueCallback) {
@@ -158,7 +300,6 @@
 
   auto nativeCallback = [self createNativeCallback:callback];
 
-  // Create and execute request
   auto request = lynx::animax::LayerCallbackRequest::Make(layerType, std::move(nativeKeyPath),
                                                           std::move(nativeValueCallback),
                                                           std::move(nativeCallback));
@@ -313,8 +454,6 @@
     return;
   }
 
-  // Read the native response before dispatching because its owner may be
-  // destroyed when this callback returns.
   if (response.IsSuccess()) {
     dispatch_async(dispatch_get_main_queue(), ^{
       [callback onSuccess];
@@ -332,3 +471,5 @@
 }
 
 @end
+
+#endif  // ANIMAX_USE_RUST_CORE
