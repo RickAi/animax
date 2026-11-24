@@ -43,6 +43,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "animax-ffi"
+version = "0.1.0"
+dependencies = [
+ "animax-base",
+ "animax-engine",
+ "animax-model",
+ "animax-property",
+ "animax-skity",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "animax-model"
 version = "0.1.0"
 dependencies = [
@@ -79,6 +92,13 @@ dependencies = [
  "fontdue",
  "image",
  "tiny-skia",
+]
+
+[[package]]
+name = "animax-wasm"
+version = "0.1.0"
+dependencies = [
+ "animax-ffi",
 ]
 
 [[package]]

@@ -1,0 +1,12 @@
+[package]
+name = "animax-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "animax_wasm"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+animax-ffi = { path = "../animax-ffi" }

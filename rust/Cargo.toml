@@ -8,6 +8,8 @@ members = [
     "animax-parser",
     "animax-animation",
     "animax-engine",
+    "animax-ffi",
+    "animax-wasm",
 ]
 
 [workspace.package]

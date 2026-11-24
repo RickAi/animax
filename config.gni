@@ -12,6 +12,9 @@ if (target_cpu == "arm" || target_cpu == "arm64") {
 }
 
 declare_args() {
+  # Pure Rust core + animax-skity renderer (replaces C++ core and C++ Skity)
+  use_rust_core = true
+
   # napi config
   use_primjs_napi = false
 

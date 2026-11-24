@@ -15,3 +15,8 @@ export {
 } from './view-types.js';
 
 export * from './view.js';
+export {
+  loadAnimaXRustWasm,
+  RustAnimaXWasmBridge,
+  RustAnimaXPlayerWrapper,
+} from './rust-wasm-bridge.js';

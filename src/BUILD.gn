@@ -20,13 +20,23 @@ group("animax_core") {
     "resource",
     "video",
   ]
+  if (use_rust_core) {
+    deps += [ "rust_bridge" ]
+  }
 }
 
 source_set("animax") {
-  deps = [
-    ":animax_core",
-    "render:skity",
-  ]
+  if (use_rust_core) {
+    deps = [
+      "../include",
+      "rust_bridge",
+    ]
+  } else {
+    deps = [
+      ":animax_core",
+      "render:skity",
+    ]
+  }
 }
 
 if (is_wasm) {
