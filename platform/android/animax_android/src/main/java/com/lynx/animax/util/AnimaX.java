@@ -89,9 +89,9 @@ public class AnimaX {
 
     mNativeLibraryLoader = loader;
 
+    // Optional when running on pure Rust AnimaX core (libanimax.so is self-contained)
     if (!loadLibrary("lynxbase")) {
-      AnimaXLog.e(TAG, "AnimaX failed to load liblynxbase.so");
-      return;
+      AnimaXLog.i(TAG, "liblynxbase.so not present; proceeding with pure Rust libanimax.so");
     }
 
     if (!loadLibrary("animax")) {

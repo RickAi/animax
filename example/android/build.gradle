@@ -7,7 +7,8 @@ buildscript {
         compileSdkVersion = 30
         abiList = project.hasProperty('abiList') ? project.property('abiList').split(',').collect { it.trim() }.findAll { it } : ['armeabi-v7a', 'arm64-v8a', 'x86_64']
 
-        pythonExec = project.file(python_exec).absolutePath
+        pythonExec = project.file(python_exec).exists() ? project.file(python_exec).absolutePath : 'python3'
+        useRustCore = project.hasProperty('useRustCore') ? project.property('useRustCore').toBoolean() : !file('../../buildtools/tools_shared/tools_shared/android_tools/generate_cmake_scripts_from_gn.py').exists()
     }
 
     repositories {
@@ -79,11 +80,6 @@ ext.getFlavorNamesAndBuildTypes = { Project project ->
 ext.writeGnArgs = { String gnArgs ->
     def parsedGnArgs = new groovy.json.JsonSlurper().parseText(gnArgs)
     parsedGnArgs.each { variantName, args ->
-        // The example links Lynx native binaries built with NDEBUG. Some Lynx headers
-        // gate fields on NDEBUG, so a debug AnimaX native build can get a different
-        // header-defined layout and crash when crossing into those binaries.
-        // Keep example native debug builds layout-compatible until headers come from
-        // the same Prefab artifacts as the linked binaries.
         if (variantName.toString().toLowerCase().contains('debug') && args instanceof Map && args.containsKey('is_debug')) {
             args['is_debug'] = 'false'
         }
@@ -95,44 +91,67 @@ ext.writeGnArgs = { String gnArgs ->
     }
 }
 
-task generateAllGnCmakeTargets {
-    // force Gradle to evaluate the child build.gradle files before the parent
-    evaluationDependsOnChildren()
+if (!rootProject.ext.useRustCore) {
+    task generateAllGnCmakeTargets {
+        // force Gradle to evaluate the child build.gradle files before the parent
+        evaluationDependsOnChildren()
 
-    rootProject.allprojects { Project project ->
-        if(project.tasks.findByName('configGnCompileParas')) {
-            println project.name + " has configGnCompileParas task."
-            dependsOn project.configGnCompileParas
+        rootProject.allprojects { Project project ->
+            if(project.tasks.findByName('configGnCompileParas')) {
+                println project.name + " has configGnCompileParas task."
+                dependsOn project.configGnCompileParas
+            }
+        }
+        doLast {
+            rootProject.ext.configureGnNdk()
+            exec {
+                workingDir "../../"
+                commandLine pythonExec, "buildtools/tools_shared/tools_shared/android_tools/generate_cmake_scripts_from_gn.py"
+                println commandLine
+            }
         }
     }
-    doLast {
-        rootProject.ext.configureGnNdk()
-        exec {
-            workingDir "../../"
-            commandLine pythonExec, "buildtools/tools_shared/tools_shared/android_tools/generate_cmake_scripts_from_gn.py"
-            println commandLine
+
+    gradle.projectsEvaluated {
+        rootProject.allprojects { Project project ->
+            project.tasks.matching {
+                it.name.startsWith('generateJsonModel') || it.name.startsWith('externalNativeBuild')
+            }.all {
+                dependsOn rootProject.generateAllGnCmakeTargets
+            }
         }
     }
-}
 
-gradle.projectsEvaluated {
-    rootProject.allprojects { Project project ->
-        project.tasks.matching {
-            it.name.startsWith('generateJsonModel') || it.name.startsWith('externalNativeBuild')
-        }.all {
-            dependsOn rootProject.generateAllGnCmakeTargets
+    task clean(type: Delete) {
+        dependsOn generateAllGnCmakeTargets
+        dependsOn subprojects*.tasks*.matching { it.name.contains('clean') }
+        doLast {
+            exec {
+                workingDir "../../"
+                commandLine pythonExec, "buildtools/tools_shared/tools_shared/android_tools/generate_cmake_scripts_from_gn.py", "--clean"
+                println commandLine
+            }
         }
     }
-}
-
-task clean(type: Delete) {
-    dependsOn generateAllGnCmakeTargets
-    dependsOn subprojects*.tasks*.matching { it.name.contains('clean') }
-    doLast {
-        exec {
-            workingDir "../../"
-            commandLine pythonExec, "buildtools/tools_shared/tools_shared/android_tools/generate_cmake_scripts_from_gn.py", "--clean"
-            println commandLine
+} else {
+    task buildRustAndroidNative {
+        doLast {
+            def jniDir = file("../../platform/android/animax_android/src/main/jniLibs")
+            def missing = rootProject.ext.abiList.findAll { abi ->
+                !new File(jniDir, "${abi}/libanimax.so").exists()
+            }
+            if (!missing.isEmpty() || (project.hasProperty('rebuildRust') && project.property('rebuildRust').toBoolean())) {
+                def abisArg = rootProject.ext.abiList.join(',')
+                exec {
+                    workingDir "../../"
+                    commandLine pythonExec, "tools/build_rust.py", "--target", "android", "--abis", abisArg
+                }
+            }
         }
+    }
+
+    task clean(type: Delete) {
+        dependsOn subprojects*.tasks*.matching { it.name.contains('clean') }
+        delete rootProject.buildDir
     }
 }

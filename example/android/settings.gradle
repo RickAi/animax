@@ -3,12 +3,18 @@
 // LICENSE file in the root directory of this source tree.
 rootProject.name = "AnimaXExample"
 
+def useRustCoreProp = gradle.startParameter.projectProperties['useRustCore']
+def useRustCore = useRustCoreProp != null ? useRustCoreProp.toBoolean() : !new File(rootProject.projectDir, '../../buildtools/tools_shared/tools_shared/android_tools/generate_cmake_scripts_from_gn.py').exists()
+
 include(":AnimaXExample")
 project(":AnimaXExample").projectDir = new File(rootProject.projectDir, './animax_example')
 
 include(":AnimaXAndroid")
 project(":AnimaXAndroid").projectDir = new File(rootProject.projectDir, '../../platform/android/animax_android')
-include(":AnimaXTextra")
-project(":AnimaXTextra").projectDir = new File(rootProject.projectDir, '../../platform/android/animax_textra')
-include(":AnimaXNapi")
-project(":AnimaXNapi").projectDir = new File(rootProject.projectDir, '../../platform/android/animax_napi')
+
+if (!useRustCore) {
+    include(":AnimaXTextra")
+    project(":AnimaXTextra").projectDir = new File(rootProject.projectDir, '../../platform/android/animax_textra')
+    include(":AnimaXNapi")
+    project(":AnimaXNapi").projectDir = new File(rootProject.projectDir, '../../platform/android/animax_napi')
+}

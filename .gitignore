@@ -83,3 +83,5 @@ example/darwin/ios/animax_example/xctestrunner
 
 # Rust build artifacts
 rust/target/
+platform/android/animax_android/src/main/jniLibs/
+platform/darwin/ios/rust_libs/
