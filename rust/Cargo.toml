@@ -4,6 +4,7 @@ members = [
     "animax-base",
     "animax-model",
     "animax-property",
+    "animax-skity",
 ]
 
 [workspace.package]
