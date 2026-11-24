@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AnimaX Web Example (Pure Rust Core + Rust Skity)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 20px; }
+    .stage {
+      width: 360px;
+      height: 360px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    animax-view {
+      width: 360px;
+      height: 360px;
+      display: block;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      max-width: 640px;
+    }
+    button, select, input[type="color"] {
+      background: #1e293b;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:hover { background: #334155; }
+    #status {
+      font-family: monospace;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <h1>AnimaX Web Example — Pure Rust Core &amp; Rust Skity</h1>
+  <div class="stage">
+    <animax-view
+      id="player"
+      src="../../example/android/animax_example/src/main/assets/sample/simple_shape.json"
+      autoplay="true"
+      loop="true"
+      objectfit="contain"
+      width="360"
+      height="360"
+    ></animax-view>
+  </div>
+  <div class="controls">
+    <select id="sampleSelect">
+      <option value="../../example/android/animax_example/src/main/assets/sample/simple_shape.json">simple_shape.json (Animated)</option>
+      <option value="../../example/android/animax_example/src/main/assets/sample/dp.json">dp.json (Dynamic Properties)</option>
+    </select>
+    <button id="btnPlay">Play</button>
+    <button id="btnPause">Pause</button>
+    <button id="btnStop">Stop</button>
+    <button id="btnRecolor">Recolor All Shapes (Green)</button>
+  </div>
+  <div id="status">Initializing pure Rust WASM...</div>
+
+  <script type="module">
+    import '../../platform/web/core/out/index.js';
+
+    const view = document.getElementById('player');
+    const status = document.getElementById('status');
+    const select = document.getElementById('sampleSelect');
+
+    view.addEventListener('ready', () => {
+      status.textContent = `Ready | duration=${view.getDuration()}ms | animating=${view.isAnimating()}`;
+    });
+    view.addEventListener('firstFrame', () => {
+      status.textContent = `Playing (Rust Skity) | duration=${view.getDuration()}ms`;
+    });
+    view.addEventListener('error', (e) => {
+      status.textContent = `Error: ${JSON.stringify(e.detail)}`;
+    });
+
+    select.addEventListener('change', () => {
+      view.setSrc(select.value);
+    });
+    document.getElementById('btnPlay').addEventListener('click', () => view.play());
+    document.getElementById('btnPause').addEventListener('click', () => view.pause());
+    document.getElementById('btnStop').addEventListener('click', () => view.stop());
+    document.getElementById('btnRecolor').addEventListener('click', () => {
+      view.updateLayerProperty(201, '**', { value: 0xff00ff88 });
+      status.textContent = 'Applied dynamic color override #FF00FF88';
+    });
+
+    window.__animaxView = view;
+  </script>
+</body>
+</html>

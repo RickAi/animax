@@ -431,6 +431,69 @@ impl AnimaXPlayer {
         self.subscribed_frames.remove(&frame);
     }
 
+    pub fn get_keys_for_key_path(
+        &self,
+        query: &animax_property::AnimaXKeyPath,
+    ) -> Vec<animax_property::AnimaXKeyPath> {
+        let Some(comp) = &self.composition else {
+            return Vec::new();
+        };
+        let ctx = RenderContext {
+            composition: comp,
+            images: &self.images,
+            video_frames: &self.video_frames,
+            font_manager: &self.font_manager,
+            props: &self.props,
+        };
+        crate::layer::resolve_matching_key_paths(&comp.layers, query, &ctx)
+    }
+
+    pub fn get_layer_bounds(&self, layer_name: &str, root_space: bool) -> Option<RectF> {
+        let comp = self.composition.as_ref()?;
+        let (sw, sh) = match &self.surface {
+            Some(s) => (s.width(), s.height()),
+            None => (comp.width().max(1.0) as u32, comp.height().max(1.0) as u32),
+        };
+        let root_mat = self.compute_root_matrix(comp, sw, sh);
+        let ctx = RenderContext {
+            composition: comp,
+            images: &self.images,
+            video_frames: &self.video_frames,
+            font_manager: &self.font_manager,
+            props: &self.props,
+        };
+        crate::layer::compute_named_layer_bounds(
+            &comp.layers,
+            &root_mat,
+            self.animator.current_frame(),
+            layer_name,
+            root_space,
+            &ctx,
+        )
+    }
+
+    pub fn start_frame(&self) -> f32 {
+        self.composition.as_ref().map_or(0.0, |c| c.start_frame)
+    }
+
+    pub fn end_frame(&self) -> f32 {
+        self.composition.as_ref().map_or(0.0, |c| c.end_frame)
+    }
+
+    pub fn memory_usage_bytes(&self) -> u64 {
+        let mut total: u64 = 0;
+        if let Some(s) = &self.surface {
+            total += (s.width() as u64) * (s.height() as u64) * 4;
+        }
+        for px in self.images.values() {
+            total += px.data().len() as u64;
+        }
+        for px in self.video_frames.values() {
+            total += px.data().len() as u64;
+        }
+        total
+    }
+
     /// Advances playback to `timestamp_ns` (VSync monotonic timestamp) and renders if a new frame is due.
     pub fn tick(&mut self, timestamp_ns: i64) -> bool {
         if !self.visibility.is_visible() {
@@ -676,5 +739,58 @@ mod tests {
         assert_eq!(px[1], 0);
         assert!((px[2] as i32 - 128).abs() <= 1);
         assert_eq!(px[3], 128);
+    }
+
+    #[test]
+    fn real_sample_lotties_render_and_animate() {
+        // 1. simple_shape.json: real 12-layer animated Lottie
+        let simple_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../example/android/animax_example/src/main/assets/sample/simple_shape.json"
+        );
+        let simple_json = std::fs::read_to_string(simple_path).expect("simple_shape.json exists");
+        let mut player = AnimaXPlayer::new(1.0);
+        assert!(player.set_surface_size(256, 256));
+        player.set_json(&simple_json).expect("simple_shape.json parses");
+        assert!(player.duration_ms() > 0);
+
+        player.set_progress(0.1);
+        let frame_a = player.pixels(PixelFormat::Rgba8888Premul).unwrap().to_vec();
+        assert!(frame_a.iter().filter(|&&b| b != 0).count() > 1000);
+
+        player.set_progress(0.5);
+        let frame_b = player.pixels(PixelFormat::Rgba8888Premul).unwrap().to_vec();
+        assert!(frame_b.iter().filter(|&&b| b != 0).count() > 1000);
+
+        let anim_diff = frame_a.iter().zip(frame_b.iter()).filter(|(a, b)| a != b).count();
+        assert!(anim_diff > 500, "simple_shape.json must animate across frames");
+        assert!(!player.get_keys_for_key_path(&AnimaXKeyPath::from_slices(&["**"])).is_empty());
+
+        // 2. dp.json: real dynamic property composition with precomps, solid, image, shape, text
+        let dp_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../example/android/animax_example/src/main/assets/sample/dp.json"
+        );
+        let dp_json = std::fs::read_to_string(dp_path).expect("dp.json exists");
+        let mut dp_player = AnimaXPlayer::new(1.0);
+        assert!(dp_player.set_surface_size(256, 320));
+        dp_player.set_json(&dp_json).expect("dp.json parses");
+        let before = dp_player.pixels(PixelFormat::Rgba8888Premul).unwrap().to_vec();
+        assert!(before.iter().filter(|&&b| b != 0).count() > 1000);
+
+        // Mutate dynamic color across all shapes via globstar and verify pixels change
+        let mut req = PropertyUpdateRequest::default();
+        req.add_layer_property(
+            AnimaXKeyPath::from_slices(&["**"]),
+            animax_property::LayerPropertyType::Color,
+            AnimaXValueParam::from_color(
+                Color::pack_argb(255, 0, 255, 128),
+                AnimaXValueParam::FRAME_INDEX_ALL,
+            ),
+        );
+        dp_player.update_properties(req);
+        let after = dp_player.pixels(PixelFormat::Rgba8888Premul).unwrap().to_vec();
+        let dp_diff = before.iter().zip(after.iter()).filter(|(a, b)| a != b).count();
+        assert!(dp_diff > 500, "dp.json dynamic color update must change rendered pixels");
     }
 }

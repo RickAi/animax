@@ -513,3 +513,130 @@ pub fn hit_test_layers(
     }
     hits
 }
+
+/// Resolves all concrete keypaths matching `query` across layers, shape groups, and contents.
+pub fn resolve_matching_key_paths(
+    layers: &[LayerModel],
+    query: &animax_property::AnimaXKeyPath,
+    ctx: &RenderContext<'_>,
+) -> Vec<animax_property::AnimaXKeyPath> {
+    let mut out = Vec::new();
+    let mut current = Vec::new();
+    collect_layer_key_paths(layers, query, &mut current, &mut out, ctx);
+    out
+}
+
+fn collect_layer_key_paths(
+    layers: &[LayerModel],
+    query: &animax_property::AnimaXKeyPath,
+    current: &mut Vec<String>,
+    out: &mut Vec<animax_property::AnimaXKeyPath>,
+    ctx: &RenderContext<'_>,
+) {
+    for layer in layers {
+        if layer.name.is_empty() {
+            continue;
+        }
+        current.push(layer.name.clone());
+        let refs: Vec<&str> = current.iter().map(|s| s.as_str()).collect();
+        if query.matches_full_path(&refs) {
+            out.push(animax_property::AnimaXKeyPath::new(current.clone()));
+        }
+        if layer.layer_type == LayerType::Shape {
+            collect_content_key_paths(&layer.shapes, query, current, out);
+        } else if layer.layer_type == LayerType::PreComp {
+            if let Some(sub) = ctx.composition.precomps.get(&layer.ref_id) {
+                collect_layer_key_paths(sub, query, current, out, ctx);
+            }
+        }
+        current.pop();
+    }
+}
+
+fn collect_content_key_paths(
+    items: &[ContentModel],
+    query: &animax_property::AnimaXKeyPath,
+    current: &mut Vec<String>,
+    out: &mut Vec<animax_property::AnimaXKeyPath>,
+) {
+    for item in items {
+        let name = match item {
+            ContentModel::ShapeGroup(v) => Some(&v.name),
+            ContentModel::ShapePath(v) => Some(&v.name),
+            ContentModel::ShapeFill(v) => Some(&v.name),
+            ContentModel::ShapeStroke(v) => Some(&v.name),
+            ContentModel::GradientFill(v) => Some(&v.name),
+            ContentModel::GradientStroke(v) => Some(&v.name),
+            ContentModel::Rectangle(v) => Some(&v.name),
+            ContentModel::Ellipse(v) => Some(&v.name),
+            ContentModel::Polystar(v) => Some(&v.name),
+            ContentModel::MergePaths(v) => Some(&v.name),
+            ContentModel::TrimPath(v) => Some(&v.name),
+            ContentModel::RoundedCorners(v) => Some(&v.name),
+            ContentModel::Repeater(v) => Some(&v.name),
+            ContentModel::Transform(_) => None,
+        };
+        if let Some(n) = name {
+            if !n.is_empty() {
+                current.push(n.clone());
+                let refs: Vec<&str> = current.iter().map(|s| s.as_str()).collect();
+                if query.matches_full_path(&refs) {
+                    out.push(animax_property::AnimaXKeyPath::new(current.clone()));
+                }
+                if let ContentModel::ShapeGroup(gr) = item {
+                    collect_content_key_paths(&gr.items, query, current, out);
+                }
+                current.pop();
+            }
+        }
+    }
+}
+
+/// Computes the screen-space or parent-space bounding box of a named layer.
+pub fn compute_named_layer_bounds(
+    layers: &[LayerModel],
+    root_matrix: &Matrix,
+    frame: f32,
+    layer_name: &str,
+    root_space: bool,
+    ctx: &RenderContext<'_>,
+) -> Option<RectF> {
+    let mut id_to_idx: HashMap<i32, usize> = HashMap::with_capacity(layers.len());
+    for (idx, l) in layers.iter().enumerate() {
+        if l.id >= 0 {
+            id_to_idx.insert(l.id, idx);
+        }
+    }
+    for layer in layers {
+        if layer.name == layer_name {
+            let local_bounds = match layer.layer_type {
+                LayerType::Shape => compute_content_bounds(&layer.shapes, frame),
+                LayerType::Solid => {
+                    RectF::from_wh(layer.solid_width as f32, layer.solid_height as f32)
+                }
+                LayerType::Image => ctx
+                    .composition
+                    .images
+                    .get(&layer.ref_id)
+                    .map_or(RectF::default(), |a| {
+                        RectF::from_wh(a.width as f32, a.height as f32)
+                    }),
+                LayerType::PreComp => {
+                    RectF::from_wh(layer.pre_comp_width, layer.pre_comp_height)
+                }
+                LayerType::AlphaVideo => ctx.composition.bounds,
+                _ => RectF::default(),
+            };
+            if root_space {
+                let (world_mat, _) = compute_layer_world_transform(
+                    layer, layers, &id_to_idx, root_matrix, frame, ctx,
+                );
+                return Some(world_mat.map_rect(local_bounds));
+            } else {
+                let ev = eval_transform(&layer.transform, frame);
+                return Some(ev.matrix.map_rect(local_bounds));
+            }
+        }
+    }
+    None
+}

@@ -322,7 +322,7 @@ export class RustAnimaXWasmBridge {
     this.rafId = requestAnimationFrame(step);
   }
 
-  private readPixelsCopy(): Uint8ClampedArray | null {
+  private readPixelsCopy(): Uint8ClampedArray<ArrayBuffer> | null {
     if (this.width <= 0 || this.height <= 0) return null;
     const lenPtr = this.exports.animax_wasm_alloc(8);
     try {
@@ -333,7 +333,9 @@ export class RustAnimaXWasmBridge {
       );
       if (!ptr) return null;
       const byteLen = new DataView(this.exports.memory.buffer).getUint32(lenPtr, true);
-      return new Uint8ClampedArray(this.exports.memory.buffer.slice(ptr, ptr + byteLen));
+      const out = new Uint8ClampedArray(new ArrayBuffer(byteLen));
+      out.set(new Uint8Array(this.exports.memory.buffer, ptr, byteLen));
+      return out;
     } finally {
       this.exports.animax_wasm_free(lenPtr, 8);
     }

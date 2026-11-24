@@ -947,6 +947,17 @@ class AnimaXViewElement
       let wasmContext: any = null;
       let glContextHandle: number = 0;
 
+      if (this._module?.isRustCore) {
+        this._wasm.setSurfaceWithCanvas(
+          '#' + this._canvas.id,
+          width,
+          height,
+          null,
+          0
+        );
+        return;
+      }
+
       if (this._activeWebGPUContext) {
         wasmContext = this._activeWebGPUContext.wasmContext;
       } else {

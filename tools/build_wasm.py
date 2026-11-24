@@ -174,22 +174,53 @@ def copy_textra_wasm(root_dir: str, out_dir: str):
     )
 
 
+def build_rust_wasm(root_path: str, build_type: str) -> None:
+    rust_dir = os.path.join(root_path, 'rust')
+    cmd = [
+        'cargo',
+        'build',
+        '-p',
+        'animax-wasm',
+        '--target',
+        'wasm32-unknown-unknown',
+    ]
+    profile = 'debug'
+    if build_type.lower() == 'release':
+        cmd.append('--release')
+        profile = 'release'
+    print('Building pure Rust AnimaX WASM:', ' '.join(cmd))
+    subprocess.check_call(cmd, cwd=rust_dir)
+
+    wasm_src = os.path.join(
+        rust_dir, 'target', 'wasm32-unknown-unknown', profile, 'animax_wasm.wasm'
+    )
+    js_src = os.path.join(root_path, 'tools', 'animax_wasm_loader_rust.js')
+    dst_dir = os.path.join(root_path, 'platform', 'web', 'core', 'public', 'build')
+    os.makedirs(dst_dir, exist_ok=True)
+    shutil.copy2(wasm_src, os.path.join(dst_dir, 'animax_wasm.wasm'))
+    shutil.copy2(js_src, os.path.join(dst_dir, 'animax_wasm.js'))
+    print(f'Pure Rust WASM built to {dst_dir} ({os.path.getsize(wasm_src)} bytes)')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--type', type=str,
                         default='Debug', help='Build Type. Debug or release')
     parser.add_argument('--package', type=str, choices=['core', 'textra'],
                         default='core',
-                        help='Package artifact(s) to copy after GN build')
+                        help='Package artifact(s) to copy after build')
+    parser.add_argument('--legacy-emscripten', action='store_true',
+                        help='Use legacy C++/Emscripten build instead of pure Rust WASM')
 
     args = parser.parse_args()
 
     file_path = os.path.dirname(os.path.abspath(__file__))
-    # Keep Emscripten's configured paths stable. Passing the same directory as
-    # both `tools/../buildtools` and its canonical path makes Emscripten think
-    # its configuration changed, which clears the sysroot during parallel
-    # Ninja builds.
     root_path = os.path.realpath(os.path.join(file_path, '..'))
+
+    if not args.legacy_emscripten and args.package == 'core':
+        build_rust_wasm(root_path, args.type)
+        sys.exit(0)
+
     configure_wasm_environment(root_path)
 
     if args.package == 'core':

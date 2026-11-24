@@ -638,6 +638,76 @@ pub unsafe extern "C" fn animax_string_free(ptr: *mut c_char) {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn animax_player_get_keys_for_key_path_json(
+    handle: *const AnimaXPlayerHandle,
+    key_path_csv: *const c_char,
+) -> *mut c_char {
+    let (Some(p), Some(kp)) = (handle.as_ref(), str_from_ptr(key_path_csv, 0)) else {
+        return std::ptr::null_mut();
+    };
+    let matches: Vec<Vec<String>> = p
+        .inner
+        .get_keys_for_key_path(&parse_key_path_csv(kp))
+        .into_iter()
+        .map(|k| k.keys().to_vec())
+        .collect();
+    let json = serde_json::to_string(&matches).unwrap_or_else(|_| "[]".to_string());
+    CString::new(json)
+        .map(|s| s.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn animax_player_get_layer_bounds(
+    handle: *const AnimaXPlayerHandle,
+    layer_name: *const c_char,
+    root_space: bool,
+    out_left: *mut f32,
+    out_top: *mut f32,
+    out_right: *mut f32,
+    out_bottom: *mut f32,
+) -> bool {
+    let (Some(p), Some(name)) = (handle.as_ref(), str_from_ptr(layer_name, 0)) else {
+        return false;
+    };
+    let Some(rect) = p.inner.get_layer_bounds(name, root_space) else {
+        return false;
+    };
+    if !out_left.is_null() {
+        *out_left = rect.left;
+    }
+    if !out_top.is_null() {
+        *out_top = rect.top;
+    }
+    if !out_right.is_null() {
+        *out_right = rect.right;
+    }
+    if !out_bottom.is_null() {
+        *out_bottom = rect.bottom;
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn animax_player_get_start_frame(handle: *const AnimaXPlayerHandle) -> f32 {
+    handle.as_ref().map_or(0.0, |p| p.inner.start_frame())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn animax_player_get_end_frame(handle: *const AnimaXPlayerHandle) -> f32 {
+    handle.as_ref().map_or(0.0, |p| p.inner.end_frame())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn animax_player_get_memory_usage_bytes(
+    handle: *const AnimaXPlayerHandle,
+) -> u64 {
+    handle
+        .as_ref()
+        .map_or(0, |p| p.inner.memory_usage_bytes())
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn animax_parse_hex_color(hex: *const c_char) -> i32 {
     str_from_ptr(hex, 0).map_or(0, ColorUtil::parse_hex_color)
 }

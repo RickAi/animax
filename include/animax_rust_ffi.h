@@ -126,6 +126,16 @@ void animax_player_unsubscribe_update_event(AnimaXPlayerHandle* handle,
 char* animax_player_drain_events_json(AnimaXPlayerHandle* handle);
 void animax_string_free(char* ptr);
 
+char* animax_player_get_keys_for_key_path_json(const AnimaXPlayerHandle* handle,
+                                               const char* key_path_csv);
+bool animax_player_get_layer_bounds(const AnimaXPlayerHandle* handle,
+                                    const char* layer_name, bool root_space,
+                                    float* out_left, float* out_top,
+                                    float* out_right, float* out_bottom);
+float animax_player_get_start_frame(const AnimaXPlayerHandle* handle);
+float animax_player_get_end_frame(const AnimaXPlayerHandle* handle);
+uint64_t animax_player_get_memory_usage_bytes(const AnimaXPlayerHandle* handle);
+
 int32_t animax_parse_hex_color(const char* hex);
 
 #ifdef __cplusplus
