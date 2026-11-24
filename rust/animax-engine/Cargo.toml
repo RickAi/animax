@@ -1,0 +1,13 @@
+[package]
+name = "animax-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+animax-base = { path = "../animax-base" }
+animax-model = { path = "../animax-model" }
+animax-property = { path = "../animax-property" }
+animax-skity = { path = "../animax-skity" }
+animax-parser = { path = "../animax-parser" }
+animax-animation = { path = "../animax-animation" }

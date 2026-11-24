@@ -31,6 +31,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "animax-engine"
+version = "0.1.0"
+dependencies = [
+ "animax-animation",
+ "animax-base",
+ "animax-model",
+ "animax-parser",
+ "animax-property",
+ "animax-skity",
+]
+
+[[package]]
 name = "animax-model"
 version = "0.1.0"
 dependencies = [
