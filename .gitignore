@@ -80,3 +80,6 @@ example/darwin/ios/animax_example/xctestrunner
 
 # ignore Gradle files
 **/.gradle/
+
+# Rust build artifacts
+rust/target/

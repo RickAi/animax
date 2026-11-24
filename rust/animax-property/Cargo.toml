@@ -1,0 +1,10 @@
+[package]
+name = "animax-property"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+animax-base = { path = "../animax-base" }
+animax-model = { path = "../animax-model" }
+serde = { workspace = true }

@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "animax-base",
+    "animax-model",
+    "animax-property",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tiny-skia = "0.11"
+fontdue = "0.9"
+flate2 = "1.0"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+base64 = "0.22"
+
+[profile.release]
+lto = "thin"
+opt-level = 3
+codegen-units = 1
